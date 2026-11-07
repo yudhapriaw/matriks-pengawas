@@ -57,7 +57,7 @@
 var $ = function (id) { return document.getElementById(id); };
 var S = { ex: [], pr: [], sel: null, q: '' }, KEY = 'pengawasDragDropV1';
 
-function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function pick(r, keys) { for (var k in r) if (keys.indexOf(norm(k)) !== -1) return String(r[k]).trim(); return ''; }
 function iso(t) { var d = parseTgl(t); return d ? d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) : String(t).trim(); }
@@ -145,7 +145,7 @@ function cnt(n) { var c = 0; S.ex.forEach(function (o) { o.names.forEach(functio
 /* ---------- Render ---------- */
 function render() {
   var q = norm(S.q);
-  $('side').innerHTML = '<input id="q" placeholder="Cari pengawas..." value="' + esc(S.q) + '"><div id="chips">' +
+  $('side').innerHTML = '<input id="q" placeholder="Cari pengawas..." value="' + (S.q) + '"><div id="chips">' +
     S.pr.map(function (p, i) {
       if (q && norm(p.nama).indexOf(q) === -1) return '';
       return '<div class="chip' + (S.sel === i ? ' sel' : '') + '" draggable="true" data-drag="p:' + i + '" data-p="' + i + '"><span>' + esc(p.nama) + '</span><b>' + cnt(p.nama) + '</b></div>';
@@ -164,7 +164,7 @@ function render() {
   $('grid').innerHTML = dates.length ? dates.map(function (d) {
     return '<div class="date"><h2>' + esc(dayLabel(d.k)) + '</h2>' + d.s.map(function (s) {
       return '<div class="sess"><h3>' + esc(sesLabel(s.k, s.j)) + '</h3><div class="cards">' + s.c.map(function (xi) {
-        var e = S.ex[xi], h = '<div class="card" data-x="' + xi + '"><div class="ch"><b>' + esc(e.ruang) + '</b> ' + esc(e.mk) + '<br><small>' + esc(e.dosen) + '</small></div>';
+        var e = S.ex[xi], h = '<div class="card" data-x="' + xi + '"><div class="ch">   <b>' + esc(e.mk || e.ruang) + '</b><br>' + (e.ruang && e.mk ? esc(e.ruang) : '') + (e.dosen ? '<br><small>' + esc(e.dosen) + '</small>' : '') + '</div>';
         e.names.forEach(function (n, i) {
           total++;
           if (n) {
