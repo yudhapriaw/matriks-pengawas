@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penjadwalan Pengawas (Drag and Drop)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;background:#f0f2f5;margin:0;color:#222}
+  header{background:linear-gradient(135deg,#004A75,#00639e);color:#fff;padding:14px 20px}
+  header h1{margin:0;font-size:1.2rem}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 20px;background:#fff;border-bottom:1px solid #ddd}
+  button,.btn{padding:7px 14px;border:0;border-radius:8px;background:#004A75;color:#fff;font-weight:700;cursor:pointer;font-size:.85rem}
+  .alt{background:#6c757d}.ok{background:#198754}.danger{background:#b02a37}
+  #stat{margin-left:auto;font-size:.85rem}
+  .main{display:grid;grid-template-columns:250px 1fr;gap:16px;padding:16px 20px;align-items:start}
+  @media(max-width:760px){.main{grid-template-columns:1fr}}
+  #side{position:sticky;top:8px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);max-height:92vh;overflow:auto}
+  #side input{width:100%;padding:6px;border:1px solid #ccc;border-radius:6px;margin-bottom:8px}
+  .chip{display:flex;justify-content:space-between;gap:6px;padding:6px 10px;margin-bottom:5px;background:#e9eff5;border:2px solid transparent;border-radius:8px;cursor:grab;font-size:.85rem;user-select:none}
+  .chip.sel{border-color:#004A75;background:#cfe2f3}.chip b{color:#004A75}
+  .date{margin:0 0 18px;background:#e3eaf2;border-radius:12px;padding:10px 14px}.date>h2{margin:0 0 10px;font-size:1.05rem;color:#004A75;border-bottom:2px solid #b8c8d9;padding-bottom:6px}
+  .sess{margin-bottom:10px}.sess>h3{margin:0 0 6px;font-size:.85rem;color:#555}
+  .cards{display:flex;flex-wrap:wrap;gap:10px}
+  .card{background:#fff;border-radius:10px;padding:10px;width:210px;box-shadow:0 2px 6px rgba(0,0,0,.08);border:2px solid transparent}
+  .card.bad{opacity:.35;border-color:#dc3545}
+  .ch{font-size:.85rem;margin-bottom:6px}.ch small{color:#666}
+  .slot{min-height:32px;margin-top:5px;padding:6px 8px;border:2px dashed #bbb;border-radius:7px;font-size:.8rem;color:#999;display:flex;justify-content:space-between;align-items:center}
+  .slot.over{border-color:#198754;background:#e7f5ec}
+  .slot.f{border:2px solid #198754;background:#e7f5ec;color:#222;cursor:grab}
+  .slot.w{border-color:#e0a800;background:#fff3cd}
+  .x{cursor:pointer;color:#b02a37;font-weight:700;padding-left:8px}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:8px;display:none;z-index:9;font-size:.9rem}
+  #toast.err{background:#b02a37}
+  .hint{font-size:.82rem;color:#555;line-height:1.5;padding:20px}
+</style>
+</head>
+<body>
+<header><h1>Penjadwalan Pengawas Ujian (Drag and Drop) <small style="font-size:.65rem;opacity:.6">v7-nov-b</small></h1></header>
+<div class="bar">
+  <label class="btn">Unggah Excel<input type="file" id="file" accept=".xlsx,.xls" hidden></label>
+  <button class="alt" id="bSample">Unduh Contoh</button>
+  <button class="ok" id="bExport">Ekspor Excel</button>
+  <button class="danger" id="bClear">Kosongkan Semua</button>
+  <span id="stat"></span>
+</div>
+<div class="main">
+  <div id="side"></div>
+  <div id="grid"><div class="hint">Unggah file Excel (sheet <b>Jadwal</b> dan <b>Pengawas</b>), atau unduh contoh dulu untuk melihat formatnya.<br>
+  Sheet Jadwal: <code>Tanggal, Sesi, Ruang</code> + opsional <code>Jam, Mata_Kuliah, Dosen, Jumlah_Pengawas</code>.<br>
+  Sheet Pengawas: <code>Nama</code> + opsional <code>Maks_Per_Hari, Tidak_Bisa</code> (pisah dengan titik koma; isi tanggal atau <code>Tanggal|Sesi</code>).</div></div>
+</div>
+<div id="toast"></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var S = { ex: [], pr: [], sel: null, q: '' }, KEY = 'pengawasDragDropV1';
+
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function pick(r, keys) { for (var k in r) if (keys.indexOf(norm(k)) !== -1) return String(r[k]).trim(); return ''; }
+function iso(t) { var d = parseTgl(t); return d ? d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) : String(t).trim(); }
+function dk(e) { return iso(e.tgl); }
+function slotOf(e) { return dk(e) + '|' + e.sesi; }
+function splitTgl(s) { // tanggal dan jam yang tergabung dalam satu sel
+  var m = String(s).match(/^(.*?\d{4}),?\s*(\d{1,2}\s*[.:]\s*\d{2}\s*-\s*\d{1,2}\s*[.:]\s*\d{2}|\d{1,2}\s*[.:]\s*\d{2})$/);
+  return m ? { tgl: m[1].trim(), jam: m[2].trim() } : { tgl: String(s).trim(), jam: '' };
+}
+function pickJam(r) { for (var k in r) if (/jam|waktu|pukul/.test(norm(k))) return String(r[k]).trim(); return ''; }
+
+/* ---------- Pengurutan hari dan jam ---------- */
+var HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+var BLN3 = ['jan', 'feb', 'mar', 'apr', 'mei', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des'];
+function bulanIdx(t) {
+  t = t.slice(0, 3); var m = { may: 'mei', aug: 'agu', oct: 'okt', dec: 'des' };
+  return BLN3.indexOf(m[t] || t);
+}
+function parseTgl(s) {
+  s = String(s).trim().toLowerCase(); var m, b;
+  if ((m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+  if ((m = s.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/)) && (b = bulanIdx(m[2])) > -1) return new Date(+m[3], b, +m[1]);
+  if ((m = s.match(/([a-z]+)\s+(\d{1,2}),?\s+(\d{4})/)) && (b = bulanIdx(m[1])) > -1) return new Date(+m[3], b, +m[2]);
+  if ((m = s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) { var y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]); }
+  return null;
+}
+function sesKey(s) { // jam (mis. 08.00-10.00) dulu, lalu nomor sesi
+  s = String(s); var m = s.match(/(\d{1,2})\s*[.:]\s*(\d{2})/);
+  if (m) return [0, +m[1] * 60 + +m[2]];
+  var n = parseFloat(s); return isNaN(n) ? [2, 0] : [1, n];
+}
+function sortEx() {
+  S.ex.sort(function (a, b) {
+    var da = parseTgl(a.tgl), db = parseTgl(b.tgl), ta = da ? da.getTime() : Infinity, tb = db ? db.getTime() : Infinity;
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    if (a.tgl !== b.tgl) return a.tgl.localeCompare(b.tgl);
+    var ka = sesKey(a.jam || a.sesi), kb = sesKey(b.jam || b.sesi);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    if (a.sesi !== b.sesi) return String(a.sesi).localeCompare(String(b.sesi), 'id', { numeric: true });
+    return String(a.ruang).localeCompare(String(b.ruang), 'id', { numeric: true });
+  });
+}
+function dayLabel(t) { var d = parseTgl(t); return d ? HARI[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN[d.getMonth()] + ' ' + d.getFullYear() : t; }
+function sesLabel(s, j) {
+  j = j || [];
+  if (j.length) return (sesKey(s)[0] === 0 ? '' : 'Sesi ' + s + ' · ') + 'Pukul ' + j.join(', ');
+  return sesKey(s)[0] === 0 ? 'Pukul ' + s : 'Sesi ' + s;
+}
+function P(n) { return S.pr.filter(function (p) { return p.nama === n; })[0] || { off: {}, maks: 99 }; }
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ ex: S.ex, pr: S.pr })); } catch (e) {} }
+function toast(m, err) {
+  var t = $('toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(toast.h); toast.h = setTimeout(function () { t.style.display = 'none'; }, 3200);
+}
+
+/* ---------- Aturan bentrok ---------- */
+// Pengawas yang sama tidak boleh ada di dua ruang pada tanggal + sesi yang sama (diblokir).
+function conflict(nama, e, skx, ski) {
+  var s = slotOf(e);
+  for (var x = 0; x < S.ex.length; x++) {
+    var o = S.ex[x]; if (slotOf(o) !== s) continue;
+    for (var i = 0; i < o.names.length; i++) if (o.names[i] === nama && !(x === skx && i === ski)) return o;
+  }
+  return null;
+}
+// Pelanggaran ringan: hanya ditandai kuning, tidak diblokir.
+function warns(nama, xi) {
+  var e = S.ex[xi], p = P(nama), w = [], d = 0;
+  S.ex.forEach(function (o) { if (dk(o) === dk(e)) o.names.forEach(function (n) { if (n === nama) d++; }); });
+  if (p.off[dk(e)] || p.off[slotOf(e)]) w.push('Ditandai tidak bisa');
+  if (e.dosen && norm(nama) === norm(e.dosen)) w.push('Dosen pengampu');
+  if (d > p.maks) w.push('Melebihi maks ' + p.maks + ' sesi per hari');
+  return w;
+}
+function assign(nama, xi, i, from) {
+  var e = S.ex[xi], c = conflict(nama, e, from ? from[0] : -1, from ? from[1] : -1);
+  if (c) return toast(nama + ' sudah bertugas di ruang ' + c.ruang + ' pada ' + e.tgl + ' sesi ' + e.sesi + '.', true);
+  if (from) S.ex[from[0]].names[from[1]] = null;
+  e.names[i] = nama; save(); render();
+}
+function cnt(n) { var c = 0; S.ex.forEach(function (o) { o.names.forEach(function (x) { if (x === n) c++; }); }); return c; }
+
+/* ---------- Render ---------- */
+function render() {
+  var q = norm(S.q);
+  $('side').innerHTML = '<input id="q" placeholder="Cari pengawas..." value="' + esc(S.q) + '"><div id="chips">' +
+    S.pr.map(function (p, i) {
+      if (q && norm(p.nama).indexOf(q) === -1) return '';
+      return '<div class="chip' + (S.sel === i ? ' sel' : '') + '" draggable="true" data-drag="p:' + i + '" data-p="' + i + '"><span>' + esc(p.nama) + '</span><b>' + cnt(p.nama) + '</b></div>';
+    }).join('') + '</div>';
+  var qi = $('q'); qi.oninput = function () { S.q = qi.value; var pos = qi.selectionStart; render(); var n = $('q'); n.focus(); n.setSelectionRange(pos, pos); };
+
+  var dates = [], total = 0, filled = 0, wn = 0;
+  S.ex.forEach(function (e, xi) {
+    var d = dates.filter(function (x) { return x.k === dk(e); })[0];
+    if (!d) { d = { k: dk(e), s: [] }; dates.push(d); }
+    var s = d.s.filter(function (x) { return x.k === e.sesi; })[0];
+    if (!s) { s = { k: e.sesi, c: [], j: [] }; d.s.push(s); }
+    if (e.jam && s.j.indexOf(e.jam) === -1) s.j.push(e.jam);
+    s.c.push(xi);
+  });
+  $('grid').innerHTML = dates.length ? dates.map(function (d) {
+    return '<div class="date"><h2>' + esc(dayLabel(d.k)) + '</h2>' + d.s.map(function (s) {
+      return '<div class="sess"><h3>' + esc(sesLabel(s.k, s.j)) + '</h3><div class="cards">' + s.c.map(function (xi) {
+        var e = S.ex[xi], h = '<div class="card" data-x="' + xi + '"><div class="ch"><b>' + esc(e.mk || e.ruang) + '</b><br>' + (e.mk ? esc(e.ruang) : '') + (e.dosen ? '<br><small>' + esc(e.dosen) + '</small>' : '') + '</div>';
+        e.names.forEach(function (n, i) {
+          total++;
+          if (n) {
+            filled++; var w = warns(n, xi); if (w.length) wn++;
+            h += '<div class="slot f' + (w.length ? ' w' : '') + '" draggable="true" data-drag="s:' + xi + ':' + i + '" data-x="' + xi + '" data-i="' + i + '" title="' + esc(w.join(', ')) + '"><span>' + esc(n) + (w.length ? ' ⚠' : '') + '</span><span class="x" data-rm="1">×</span></div>';
+          } else h += '<div class="slot" data-x="' + xi + '" data-i="' + i + '">kosong</div>';
+        });
+        return h + '</div>';
+      }).join('') + '</div></div>';
+    }).join('') + '</div>';
+  }).join('') : $('grid').innerHTML;
+  if (dates.length) $('stat').textContent = 'Terisi ' + filled + ' / ' + total + ' slot' + (wn ? ' · ' + wn + ' peringatan' : '');
+}
+
+/* ---------- Drag and drop + klik ---------- */
+var drag = null;
+function parse(v) {
+  var a = v.split(':');
+  if (a[0] === 'p') return { nama: S.pr[+a[1]].nama, from: null };
+  return { nama: S.ex[+a[1]].names[+a[2]], from: [+a[1], +a[2]] };
+}
+document.addEventListener('dragstart', function (e) {
+  var t = e.target.closest && e.target.closest('[data-drag]'); if (!t) return;
+  drag = parse(t.dataset.drag); e.dataTransfer.setData('text/plain', t.dataset.drag); e.dataTransfer.effectAllowed = 'move';
+  document.querySelectorAll('.card').forEach(function (c) {
+    if (conflict(drag.nama, S.ex[+c.dataset.x], drag.from ? drag.from[0] : -1, drag.from ? drag.from[1] : -1)) c.classList.add('bad');
+  });
+});
+document.addEventListener('dragend', function () {
+  drag = null;
+  document.querySelectorAll('.bad,.over').forEach(function (c) { c.classList.remove('bad', 'over'); });
+});
+document.addEventListener('dragover', function (e) {
+  var s = e.target.closest && e.target.closest('.slot'); if (!s) return;
+  e.preventDefault();
+  document.querySelectorAll('.over').forEach(function (c) { c.classList.remove('over'); }); s.classList.add('over');
+});
+document.addEventListener('drop', function (e) {
+  var s = e.target.closest && e.target.closest('.slot'); if (!s || !drag) return;
+  e.preventDefault(); assign(drag.nama, +s.dataset.x, +s.dataset.i, drag.from);
+});
+document.addEventListener('click', function (e) {
+  var rm = e.target.closest('[data-rm]');
+  if (rm) { var s = rm.closest('.slot'); S.ex[+s.dataset.x].names[+s.dataset.i] = null; save(); return render(); }
+  var c = e.target.closest('.chip');
+  if (c) { S.sel = S.sel === +c.dataset.p ? null : +c.dataset.p; return render(); }
+  var sl = e.target.closest('.slot');
+  if (sl && !sl.classList.contains('f') && S.sel !== null) assign(S.pr[S.sel].nama, +sl.dataset.x, +sl.dataset.i, null); // alternatif untuk layar sentuh
+});
+
+/* ---------- Excel ---------- */
+function sheetRows(wb, key, idx) {
+  var n = wb.SheetNames.filter(function (x) { return norm(x) === key; })[0] || wb.SheetNames[idx];
+  return n ? XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' }) : [];
+}
+$('file').addEventListener('change', function (ev) {
+  var f = ev.target.files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function (e) {
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      S.ex = sheetRows(wb, 'jadwal', 0).map(function (r) {
+        var n = parseInt(pick(r, ['jumlahpengawas']), 10) || 2, names = [], t = splitTgl(pick(r, ['tanggal', 'tgl'])); while (names.length < n) names.push(null);
+        return { tgl: t.tgl, sesi: pick(r, ['sesi']) || pickJam(r) || t.jam, jam: pick(r, ['sesi']) ? (pickJam(r) || t.jam) : '', ruang: pick(r, ['ruang', 'ruangan']), mk: pick(r, ['matakuliah', 'mk']), dosen: pick(r, ['dosen']), names: names };
+      }).filter(function (x) { return x.tgl && x.ruang; });
+      sortEx();
+      S.pr = sheetRows(wb, 'pengawas', 1).map(function (r) {
+        var off = {}; pick(r, ['tidakbisa']).split(/[;\n]/).forEach(function (t) { t = t.trim(); if (t) { var q = t.split('|'); off[q.length > 1 ? iso(q[0]) + '|' + q.slice(1).join('|').trim() : iso(t)] = true; } });
+        return { nama: pick(r, ['nama']), maks: parseInt(pick(r, ['maksperhari']), 10) || 2, off: off };
+      }).filter(function (x) { return x.nama; });
+      S.sel = null; save(); render(); toast(S.ex.length + ' ujian dan ' + S.pr.length + ' pengawas dimuat.');
+    } catch (err) { console.error(err); toast('Gagal membaca file Excel.', true); }
+  };
+  rd.readAsArrayBuffer(f); ev.target.value = '';
+});
+function exportData() {
+  var slots = [], cell = {}, jam = {};
+  S.ex.forEach(function (e) { var k = slotOf(e); if (slots.indexOf(k) === -1) slots.push(k); if (e.jam && (jam[k] || '').indexOf(e.jam) === -1) jam[k] = (jam[k] ? jam[k] + ' / ' : '') + e.jam; e.names.forEach(function (n) { if (n) cell[n + '@' + k] = e.ruang; }); });
+  var m = [['Pengawas'].concat(slots.map(function (s) { var q = s.split('|'); return dayLabel(q[0]) + ' / ' + sesLabel(q.slice(1).join('|'), jam[s] ? [jam[s]] : []); }), ['Total'])];
+  S.pr.forEach(function (p) { m.push([p.nama].concat(slots.map(function (s) { return cell[p.nama + '@' + s] || ''; }), [cnt(p.nama)])); });
+  var max = Math.max.apply(null, S.ex.map(function (e) { return e.names.length; }).concat([1])), l = ['Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata Kuliah', 'Dosen'];
+  for (var i = 1; i <= max; i++) l.push('Pengawas ' + i);
+  var list = [l]; S.ex.forEach(function (e) { var tm = sesKey(e.sesi)[0] === 0, r = [dayLabel(e.tgl), tm ? '' : e.sesi, e.jam || (tm ? e.sesi : ''), e.ruang, e.mk, e.dosen]; for (var i = 0; i < max; i++) r.push(e.names[i] || ''); list.push(r); });
+  return { m: m, list: list };
+}
+$('bExport').onclick = function () {
+  if (!S.ex.length) return toast('Belum ada data.', true);
+  var d = exportData(), wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.m), 'Matrix');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.list), 'Daftar');
+  XLSX.writeFile(wb, 'jadwal_pengawas.xlsx');
+};
+$('bClear').onclick = function () {
+  if (S.ex.length && confirm('Kosongkan semua penugasan?')) { S.ex.forEach(function (e) { e.names = e.names.map(function () { return null; }); }); save(); render(); }
+};
+$('bSample').onclick = function () {
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata_Kuliah', 'Dosen', 'Jumlah_Pengawas'],
+    ['2026-12-01', '1', '08.00-10.00', 'R101', 'Agronomi', 'Dr. Budi', 2], ['2026-12-01', '1', '08.00-10.00', 'R102', 'Ilmu Tanah', 'Dr. Sari', 2],
+    ['2026-12-01', '2', '10.30-12.00', 'R101', 'Hama dan Penyakit', 'Dr. Andi', 2], ['2026-12-02', '1', '08.00-10.00', 'R101', 'Statistika', 'Dr. Rina', 2]]), 'Jadwal');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Nama', 'Maks_Per_Hari', 'Tidak_Bisa'], ['Dr. Budi', 2, '2026-12-02'], ['Dr. Sari', 2, ''], ['Dr. Andi', 1, '2026-12-01|2'],
+    ['Dr. Rina', 2, ''], ['Pak Joko', 2, ''], ['Bu Maya', 2, '']]), 'Pengawas');
+  XLSX.writeFile(wb, 'contoh_data_pengawas.xlsx');
+};
+
+/* ---------- Lanjutkan sesi sebelumnya (disimpan di browser) ---------- */
+try {
+  var d = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (d && d.ex && d.pr && d.ex.length) { S.ex = d.ex; S.pr = d.pr; sortEx(); render(); toast('Melanjutkan pekerjaan sebelumnya.'); }
+} catch (e) {}
+</script>
+</body>
+</html>
