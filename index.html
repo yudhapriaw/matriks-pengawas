@@ -11,8 +11,10 @@
   header{background:linear-gradient(135deg,#004A75,#00639e);color:#fff;padding:14px 20px}
   header h1{margin:0;font-size:1.2rem}
   .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 20px;background:#fff;border-bottom:1px solid #ddd}
-  button,.btn{padding:7px 14px;border:0;border-radius:8px;background:#004A75;color:#fff;font-weight:700;cursor:pointer;font-size:.85rem}
-  .alt{background:#6c757d}.ok{background:#198754}.danger{background:#b02a37}
+  button,.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:0;border-radius:10px;transition:filter .15s,transform .05s;background:#004A75;color:#fff;font-weight:700;cursor:pointer;font-size:.85rem}
+  .alt{background:#6c757d}
+  button:hover,.btn:hover{filter:brightness(1.12)}button:active,.btn:active{transform:scale(.97)}
+  svg.i{width:16px;height:16px;flex:none}.ok{background:#198754}.danger{background:#b02a37}
   #stat{margin-left:auto;font-size:.85rem}
   .main{display:grid;grid-template-columns:250px 1fr;gap:16px;padding:16px 20px;align-items:start}
   @media(max-width:760px){.main{grid-template-columns:1fr}}
@@ -30,6 +32,12 @@
   .slot.over{border-color:#198754;background:#e7f5ec}
   .slot.f{border:2px solid #198754;background:#e7f5ec;color:#222;cursor:grab}
   .slot.w{border-color:#e0a800;background:#fff3cd}
+  .slot.f.dup{border-color:#dc3545;background:#f8d7da}
+  .tag{background:#004A75;color:#fff;border-radius:4px;padding:0 5px;font-size:.7rem;font-weight:700}
+  .card.p-s1{border-left:6px solid #0d6efd}.card.p-s1 .tag,button.p-s1{background:#0d6efd}
+  .card.p-s2{border-left:6px solid #fd7e14}.card.p-s2 .tag,button.p-s2{background:#fd7e14}
+  .card.p-s3{border-left:6px solid #198754}.card.p-s3 .tag,button.p-s3{background:#198754}
+  button.pbtn:not(.on){opacity:.5}button.pbtn.on{box-shadow:0 0 0 3px rgba(0,0,0,.18)}
   .x{cursor:pointer;color:#b02a37;font-weight:700;padding-left:8px}
   #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:8px;display:none;z-index:9;font-size:.9rem}
   #toast.err{background:#b02a37}
@@ -37,25 +45,27 @@
 </style>
 </head>
 <body>
-<header><h1>Penjadwalan Pengawas Ujian (Drag and Drop) <small style="font-size:.65rem;opacity:.6">v7-nov-b</small></h1></header>
+<header><h1>Penjadwalan Pengawas Ujian (Drag and Drop) <small style="font-size:.65rem;opacity:.6">v11-nov</small></h1></header>
 <div class="bar">
-  <label class="btn">Unggah Excel<input type="file" id="file" accept=".xlsx,.xls" hidden></label>
-  <button class="alt" id="bSample">Unduh Contoh</button>
-  <button class="ok" id="bExport">Ekspor Excel</button>
-  <button class="danger" id="bClear">Kosongkan Semua</button>
+  <label class="btn"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg> Unggah Excel<input type="file" id="file" accept=".xlsx,.xls" hidden></label>
+  <button class="alt" id="bSample"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg> Unduh Contoh</button>
+  <button class="ok" id="bExport"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></svg> Ekspor Excel</button>
+  <button class="danger" id="bClear"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Kosongkan Semua</button>
+  <span id="tabs"></span>
   <span id="stat"></span>
 </div>
 <div class="main">
   <div id="side"></div>
   <div id="grid"><div class="hint">Unggah file Excel (sheet <b>Jadwal</b> dan <b>Pengawas</b>), atau unduh contoh dulu untuk melihat formatnya.<br>
-  Sheet Jadwal: <code>Tanggal, Sesi, Ruang</code> + opsional <code>Jam, Mata_Kuliah, Dosen, Jumlah_Pengawas</code>.<br>
+  Sheet Jadwal: <code>Tanggal, Sesi, Ruang</code> + opsional <code>Program, Jam, Mata_Kuliah, Dosen, Jumlah_Pengawas, Pengawas_1, Pengawas_2</code> (isi <code>Pengawas_x</code> untuk jadwal yang pengawasnya sudah ada, misalnya S1).<br>
   Sheet Pengawas: <code>Nama</code> + opsional <code>Maks_Per_Hari, Tidak_Bisa</code> (pisah dengan titik koma; isi tanggal atau <code>Tanggal|Sesi</code>).</div></div>
 </div>
 <div id="toast"></div>
 
 <script>
 var $ = function (id) { return document.getElementById(id); };
-var S = { ex: [], pr: [], sel: null, q: '' }, KEY = 'pengawasDragDropV1';
+var IC = { grid: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>', cap: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>' };
+var S = { ex: [], pr: [], sel: null, q: '', prog: '' }, KEY = 'pengawasDragDropV1';
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -117,10 +127,18 @@ function toast(m, err) {
 
 /* ---------- Aturan bentrok ---------- */
 // Pengawas yang sama tidak boleh ada di dua ruang pada tanggal + sesi yang sama (diblokir).
+function rangeOf(e) { var m = String(e.jam || e.sesi).match(/(\d{1,2})\s*[.:]\s*(\d{2})\s*-\s*(\d{1,2})\s*[.:]\s*(\d{2})/); return m ? [+m[1] * 60 + +m[2], +m[3] * 60 + +m[4]] : null; }
+function sameTime(a, b) { // hari sama dan (sesi sama atau rentang jam beririsan)
+  if (dk(a) !== dk(b)) return false;
+  if (slotOf(a) === slotOf(b)) return true;
+  var ra = rangeOf(a), rb = rangeOf(b);
+  return !!(ra && rb && ra[0] < rb[1] && rb[0] < ra[1]);
+}
+function addMissing() { S.ex.forEach(function (e) { e.names.forEach(function (n) { if (n && !S.pr.some(function (p) { return p.nama === n; })) S.pr.push({ nama: n, maks: 2, off: {} }); }); }); }
 function conflict(nama, e, skx, ski) {
   var s = slotOf(e);
   for (var x = 0; x < S.ex.length; x++) {
-    var o = S.ex[x]; if (slotOf(o) !== s) continue;
+    var o = S.ex[x]; if (!sameTime(o, e)) continue;
     for (var i = 0; i < o.names.length; i++) if (o.names[i] === nama && !(x === skx && i === ski)) return o;
   }
   return null;
@@ -152,8 +170,13 @@ function render() {
     }).join('') + '</div>';
   var qi = $('q'); qi.oninput = function () { S.q = qi.value; var pos = qi.selectionStart; render(); var n = $('q'); n.focus(); n.setSelectionRange(pos, pos); };
 
+  var progs = []; S.ex.forEach(function (e) { var g = e.prog || ''; if (g && progs.indexOf(g) === -1) progs.push(g); });
+  $('tabs').innerHTML = progs.length ? ['Semua'].concat(progs).map(function (g) {
+    var v = g === 'Semua' ? '' : g; return '<button class="' + (v ? 'pbtn p-' + norm(v) + (S.prog === v ? ' on' : '') : (S.prog === v ? '' : 'alt')) + '" data-prog="' + esc(v) + '">' + (g === 'Semua' ? IC.grid : IC.cap) + esc(g) + '</button>';
+  }).join(' ') : '';
   var dates = [], total = 0, filled = 0, wn = 0;
   S.ex.forEach(function (e, xi) {
+    if (S.prog && (e.prog || '') !== S.prog) return;
     var d = dates.filter(function (x) { return x.k === dk(e); })[0];
     if (!d) { d = { k: dk(e), s: [] }; dates.push(d); }
     var s = d.s.filter(function (x) { return x.k === e.sesi; })[0];
@@ -164,12 +187,12 @@ function render() {
   $('grid').innerHTML = dates.length ? dates.map(function (d) {
     return '<div class="date"><h2>' + esc(dayLabel(d.k)) + '</h2>' + d.s.map(function (s) {
       return '<div class="sess"><h3>' + esc(sesLabel(s.k, s.j)) + '</h3><div class="cards">' + s.c.map(function (xi) {
-        var e = S.ex[xi], h = '<div class="card" data-x="' + xi + '"><div class="ch"><b>' + esc(e.mk || e.ruang) + '</b><br>' + (e.mk ? esc(e.ruang) : '') + (e.dosen ? '<br><small>' + esc(e.dosen) + '</small>' : '') + '</div>';
+        var e = S.ex[xi], h = '<div class="card' + (e.prog ? ' p-' + norm(e.prog) : '') + '" data-x="' + xi + '"><div class="ch">' + (e.prog ? '<span class="tag">' + esc(e.prog) + '</span> ' : '') + '<b>' + esc(e.mk || e.ruang) + '</b><br>' + (e.mk ? esc(e.ruang) : '') + (e.dosen ? '<br><small>' + esc(e.dosen) + '</small>' : '') + '</div>';
         e.names.forEach(function (n, i) {
           total++;
           if (n) {
-            filled++; var w = warns(n, xi); if (w.length) wn++;
-            h += '<div class="slot f' + (w.length ? ' w' : '') + '" draggable="true" data-drag="s:' + xi + ':' + i + '" data-x="' + xi + '" data-i="' + i + '" title="' + esc(w.join(', ')) + '"><span>' + esc(n) + (w.length ? ' ⚠' : '') + '</span><span class="x" data-rm="1">×</span></div>';
+            filled++; var w = warns(n, xi), dup = conflict(n, e, xi, i); if (w.length || dup) wn++;
+            h += '<div class="slot f' + (w.length ? ' w' : '') + (dup ? ' dup' : '') + '" draggable="true" data-drag="s:' + xi + ':' + i + '" data-x="' + xi + '" data-i="' + i + '" title="' + esc(w.concat(dup ? ['Bentrok dengan ruang ' + dup.ruang + (dup.prog ? ' (' + dup.prog + ')' : '')] : []).join(', ')) + '"><span>' + esc(n) + (w.length || dup ? ' ⚠' : '') + '</span><span class="x" data-rm="1">×</span></div>';
           } else h += '<div class="slot" data-x="' + xi + '" data-i="' + i + '">kosong</div>';
         });
         return h + '</div>';
@@ -207,6 +230,7 @@ document.addEventListener('drop', function (e) {
   e.preventDefault(); assign(drag.nama, +s.dataset.x, +s.dataset.i, drag.from);
 });
 document.addEventListener('click', function (e) {
+  var tb = e.target.closest('[data-prog]'); if (tb) { S.prog = tb.dataset.prog; return render(); }
   var rm = e.target.closest('[data-rm]');
   if (rm) { var s = rm.closest('.slot'); S.ex[+s.dataset.x].names[+s.dataset.i] = null; save(); return render(); }
   var c = e.target.closest('.chip');
@@ -227,27 +251,28 @@ $('file').addEventListener('change', function (ev) {
     try {
       var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       S.ex = sheetRows(wb, 'jadwal', 0).map(function (r) {
-        var n = parseInt(pick(r, ['jumlahpengawas']), 10) || 2, names = [], t = splitTgl(pick(r, ['tanggal', 'tgl'])); while (names.length < n) names.push(null);
-        return { tgl: t.tgl, sesi: pick(r, ['sesi']) || pickJam(r) || t.jam, jam: pick(r, ['sesi']) ? (pickJam(r) || t.jam) : '', ruang: pick(r, ['ruang', 'ruangan']), mk: pick(r, ['matakuliah', 'mk']), dosen: pick(r, ['dosen']), names: names };
+        var n = parseInt(pick(r, ['jumlahpengawas']), 10) || 2, names = [], t = splitTgl(pick(r, ['tanggal', 'tgl'])); var pre = []; for (var k in r) if (/^pengawas\d*$/.test(norm(k))) String(r[k]).split(/[;\n]/).forEach(function (x) { x = x.trim(); if (x) pre.push(x); });
+        if (pre.length > n) n = pre.length; names = pre.slice(); while (names.length < n) names.push(null);
+        return { tgl: t.tgl, sesi: pick(r, ['sesi']) || pickJam(r) || t.jam, jam: pick(r, ['sesi']) ? (pickJam(r) || t.jam) : '', ruang: pick(r, ['ruang', 'ruangan']), mk: pick(r, ['matakuliah', 'mk']), dosen: pick(r, ['dosen']), prog: pick(r, ['program', 'prodi', 'jenjang']), names: names };
       }).filter(function (x) { return x.tgl && x.ruang; });
       sortEx();
       S.pr = sheetRows(wb, 'pengawas', 1).map(function (r) {
         var off = {}; pick(r, ['tidakbisa']).split(/[;\n]/).forEach(function (t) { t = t.trim(); if (t) { var q = t.split('|'); off[q.length > 1 ? iso(q[0]) + '|' + q.slice(1).join('|').trim() : iso(t)] = true; } });
         return { nama: pick(r, ['nama']), maks: parseInt(pick(r, ['maksperhari']), 10) || 2, off: off };
       }).filter(function (x) { return x.nama; });
-      S.sel = null; save(); render(); toast(S.ex.length + ' ujian dan ' + S.pr.length + ' pengawas dimuat.');
+      addMissing(); S.sel = null; S.prog = ''; save(); render(); toast(S.ex.length + ' ujian dan ' + S.pr.length + ' pengawas dimuat.');
     } catch (err) { console.error(err); toast('Gagal membaca file Excel.', true); }
   };
   rd.readAsArrayBuffer(f); ev.target.value = '';
 });
-function exportData() {
-  var slots = [], cell = {}, jam = {};
-  S.ex.forEach(function (e) { var k = slotOf(e); if (slots.indexOf(k) === -1) slots.push(k); if (e.jam && (jam[k] || '').indexOf(e.jam) === -1) jam[k] = (jam[k] ? jam[k] + ' / ' : '') + e.jam; e.names.forEach(function (n) { if (n) cell[n + '@' + k] = e.ruang; }); });
+function exportData(prog) {
+  var EX = S.ex.filter(function (e) { return !prog || (e.prog || '') === prog; }), slots = [], cell = {}, jam = {};
+  EX.forEach(function (e) { var k = slotOf(e); if (slots.indexOf(k) === -1) slots.push(k); if (e.jam && (jam[k] || '').indexOf(e.jam) === -1) jam[k] = (jam[k] ? jam[k] + ' / ' : '') + e.jam; e.names.forEach(function (n) { if (n) cell[n + '@' + k] = e.ruang + (e.prog && !prog ? ' (' + e.prog + ')' : ''); }); });
   var m = [['Pengawas'].concat(slots.map(function (s) { var q = s.split('|'); return dayLabel(q[0]) + ' / ' + sesLabel(q.slice(1).join('|'), jam[s] ? [jam[s]] : []); }), ['Total'])];
-  S.pr.forEach(function (p) { m.push([p.nama].concat(slots.map(function (s) { return cell[p.nama + '@' + s] || ''; }), [cnt(p.nama)])); });
-  var max = Math.max.apply(null, S.ex.map(function (e) { return e.names.length; }).concat([1])), l = ['Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata Kuliah', 'Dosen'];
+  S.pr.forEach(function (p) { m.push([p.nama].concat(slots.map(function (s) { return cell[p.nama + '@' + s] || ''; }), [EX.reduce(function (a, e) { return a + e.names.filter(function (x) { return x === p.nama; }).length; }, 0)])); });
+  var max = Math.max.apply(null, EX.map(function (e) { return e.names.length; }).concat([1])), l = ['Program', 'Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata Kuliah', 'Dosen'];
   for (var i = 1; i <= max; i++) l.push('Pengawas ' + i);
-  var list = [l]; S.ex.forEach(function (e) { var tm = sesKey(e.sesi)[0] === 0, r = [dayLabel(e.tgl), tm ? '' : e.sesi, e.jam || (tm ? e.sesi : ''), e.ruang, e.mk, e.dosen]; for (var i = 0; i < max; i++) r.push(e.names[i] || ''); list.push(r); });
+  var list = [l]; EX.forEach(function (e) { var tm = sesKey(e.sesi)[0] === 0, r = [e.prog || '', dayLabel(e.tgl), tm ? '' : e.sesi, e.jam || (tm ? e.sesi : ''), e.ruang, e.mk, e.dosen]; for (var i = 0; i < max; i++) r.push(e.names[i] || ''); list.push(r); });
   return { m: m, list: list };
 }
 $('bExport').onclick = function () {
@@ -255,6 +280,8 @@ $('bExport').onclick = function () {
   var d = exportData(), wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.m), 'Matrix');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d.list), 'Daftar');
+  var pl = []; S.ex.forEach(function (e) { if (e.prog && pl.indexOf(e.prog) === -1) pl.push(e.prog); });
+  pl.forEach(function (g) { XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(exportData(g).m), ('Matrix ' + g).replace(/[\\\/?*\[\]:]/g, '').slice(0, 31)); });
   XLSX.writeFile(wb, 'jadwal_pengawas.xlsx');
 };
 $('bClear').onclick = function () {
@@ -263,9 +290,12 @@ $('bClear').onclick = function () {
 $('bSample').onclick = function () {
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ['Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata_Kuliah', 'Dosen', 'Jumlah_Pengawas'],
-    ['2026-12-01', '1', '08.00-10.00', 'R101', 'Agronomi', 'Dr. Budi', 2], ['2026-12-01', '1', '08.00-10.00', 'R102', 'Ilmu Tanah', 'Dr. Sari', 2],
-    ['2026-12-01', '2', '10.30-12.00', 'R101', 'Hama dan Penyakit', 'Dr. Andi', 2], ['2026-12-02', '1', '08.00-10.00', 'R101', 'Statistika', 'Dr. Rina', 2]]), 'Jadwal');
+    ['Tanggal', 'Sesi', 'Jam', 'Ruang', 'Mata_Kuliah', 'Dosen', 'Jumlah_Pengawas', 'Program', 'Pengawas_1', 'Pengawas_2'],
+    ['2026-12-01', '1', '08.00-10.00', 'R101', 'Agronomi', 'Dr. Budi', 2, 'S1', 'Pak Joko', 'Bu Maya'],
+    ['2026-12-01', '1', '08.00-10.00', 'R102', 'Ilmu Tanah', 'Dr. Sari', 2, 'S1', 'Dr. Rina', ''],
+    ['2026-12-01', '2', '08.30-10.30', 'R201', 'Manajemen Lahan', 'Dr. Andi', 2, 'S2', '', ''],
+    ['2026-12-01', '3', '10.30-12.00', 'R101', 'Hama dan Penyakit', 'Dr. Andi', 2, 'S1', 'Pak Joko', ''],
+    ['2026-12-02', '1', '08.00-10.00', 'R101', 'Statistika', 'Dr. Rina', 2, 'S2', '', '']]), 'Jadwal');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Nama', 'Maks_Per_Hari', 'Tidak_Bisa'], ['Dr. Budi', 2, '2026-12-02'], ['Dr. Sari', 2, ''], ['Dr. Andi', 1, '2026-12-01|2'],
     ['Dr. Rina', 2, ''], ['Pak Joko', 2, ''], ['Bu Maya', 2, '']]), 'Pengawas');
